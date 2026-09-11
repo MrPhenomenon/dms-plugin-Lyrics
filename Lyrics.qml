@@ -170,7 +170,6 @@ PluginComponent {
 
     property string clockTimezones: pluginData.clockTimezones ?? "中国时间:8,日本时间:9,太平洋时间:auto"
     property bool useAlbumAccent: pluginData.useAlbumAccent ?? true
-    property bool usePillAccent: pluginData.usePillAccent ?? false
     property bool showStatusIndicators: pluginData.showStatusIndicators ?? true
     property bool scrollWheelVolume: pluginData.scrollWheelVolume ?? true
     readonly property color _cardAccent: root.useAlbumAccent ? MediaAccentService.accent : Theme.primary
@@ -1654,6 +1653,7 @@ PluginComponent {
             readonly property bool rightAligned: root.coverPosition === "right"
             readonly property bool dualMode: centered
             readonly property int fontSize: pluginData.lyricsFontSize || Theme.fontSizeMedium
+            readonly property int fontWeight: parseInt(pluginData.lyricsFontWeight) || Font.Normal
             readonly property bool infoPaused: root.pausedState
 
             readonly property bool introPhase: root.hasPlayer && root.isPlaying
@@ -1675,8 +1675,16 @@ PluginComponent {
             MouseArea {
                 id: wheelVolumeArea
                 anchors.fill: parent
-                acceptedButtons: Qt.NoButton
+                acceptedButtons: Qt.MiddleButton
                 cursorShape: Qt.PointingHandCursor
+                onClicked: (mouse) => {
+                    if (mouse.button === Qt.MiddleButton && root.activePlayer) {
+                        if (root.activePlayer.playbackState === MprisPlaybackState.Playing)
+                            root.activePlayer.pause()
+                        else
+                            root.activePlayer.play()
+                    }
+                }
                 onWheel: (wheel) => {
                     if (!root.scrollWheelVolume || !root.activePlayer) return
                     if (root.activePlayer.volumeSupported === false) return
@@ -1723,36 +1731,12 @@ PluginComponent {
                 color: Theme.surfaceContainerHighest
                 clip: true
 
-                Timer {
-                    id: artBounceTimer
-                    interval: 0
-                    onTriggered: {
-                        var c = artLoader.sourceComponent;
-                        artLoader.sourceComponent = null;
-                        artLoader.sourceComponent = c;
-                    }
-                }
-
-                Connections {
-                    target: root
-                    function onCurrentTitleChanged() {
-                        artBounceTimer.restart();
-                    }
-                }
-
-                Loader {
-                    id: artLoader
+                DankAlbumArt {
                     anchors.fill: parent
-                    sourceComponent: artSourceComponent
-                }
-
-                Component {
-                    id: artSourceComponent
-                    DankAlbumArt {
-                        anchors.fill: parent
-                        activePlayer: root.activePlayer
-                        showAnimation: false
-                    }
+                    activePlayer: root.activePlayer
+                    artUrl: TrackArtService.resolvedArtUrl
+                    accentColor: root._cardAccent
+                    showAnimation: false
                 }
 
                 RotationAnimation on rotation {
@@ -1782,9 +1766,11 @@ PluginComponent {
                     spacing: 8
                     width: Math.min(implicitWidth, 350)
 
-                    StyledText {
-                        text: root.isBrowserVideo ? "🎬 " : ""
-                        font.pixelSize: hPillRoot.fontSize
+                    DankIcon {
+                        name: "movie"
+                        size: hPillRoot.fontSize
+                        color: Theme.surfaceText
+                        anchors.verticalCenter: parent.verticalCenter
                         visible: root.isBrowserVideo && !hPillRoot.infoPaused
                     }
 
@@ -1804,14 +1790,14 @@ PluginComponent {
                                 return root.currentTitle || "";
                             return root.currentDisplayText();
                         }
-font.pixelSize: hPillRoot.fontSize
-                    font.family: Theme.fontFamily
-                    color: !root.idleClock && root.usePillAccent ? MediaAccentService.accent : Theme.widgetTextColor
-                    font.weight: Font.Bold
+                        font.pixelSize: hPillRoot.fontSize
+                        font.family: Theme.fontFamily
+                        color: root.idleClock ? root._cardAccent : Theme.widgetTextColor
+                        font.weight: hPillRoot.fontWeight
                     wrapMode: Text.NoWrap
                     maximumLineCount: 1
-                    elide: root.lyricEllipsis ? Text.ElideRight : Text.ElideNone
-                        width: root.lyricEllipsis ? Math.min(implicitWidth, 350 - 48) : implicitWidth
+                        elide: root.lyricEllipsis ? Text.ElideRight : Text.ElideNone
+                        width: root.lyricEllipsis ? Math.min(implicitWidth, 350 - 48) + 5 : implicitWidth + 5
                         visible: text !== ""
                     }
 
@@ -1828,10 +1814,10 @@ font.pixelSize: hPillRoot.fontSize
                             }
                             return "";
                         }
-                        font.pixelSize: hPillRoot.fontSize + 2
+                        font.pixelSize: hPillRoot.fontSize
                         font.family: Theme.fontFamily
                         color: Theme.widgetTextColor
-                        font.weight: Font.Bold
+                        font.weight: hPillRoot.fontWeight
                     wrapMode: Text.NoWrap
                     maximumLineCount: 1
                         elide: Text.ElideRight
@@ -1863,7 +1849,7 @@ font.pixelSize: hPillRoot.fontSize
                     }
                     font.pixelSize: hPillRoot.fontSize
                     font.family: Theme.fontFamily
-                    color: !root.idleClock && root.usePillAccent ? MediaAccentService.accent : Theme.widgetTextColor
+                    color: root.idleClock ? root._cardAccent : Theme.widgetTextColor
                     font.weight: Font.Bold
                     wrapMode: Text.NoWrap
                     maximumLineCount: 1
@@ -1898,7 +1884,7 @@ font.pixelSize: hPillRoot.fontSize
                     }
                     font.pixelSize: hPillRoot.fontSize
                     font.family: Theme.fontFamily
-                    color: !root.idleClock && root.usePillAccent ? MediaAccentService.accent : Theme.widgetTextColor
+                    color: Theme.widgetTextColor
                     font.weight: Font.Bold
                     wrapMode: Text.NoWrap
                     maximumLineCount: 1
@@ -1927,13 +1913,13 @@ font.pixelSize: hPillRoot.fontSize
             DankIcon {
                 name: "lyrics"
                 size: Theme.iconSize
-                color: root.lyricsLines.length > 0 && root.usePillAccent ? MediaAccentService.accent : Theme.widgetTextColor
+                color: root.lyricsLines.length > 0 ? root._cardAccent : Theme.widgetTextColor
                 anchors.horizontalCenter: parent.horizontalCenter
             }
 
-            StyledText {
-                text: "♪"
-                font.pixelSize: Theme.fontSizeSmall
+            DankIcon {
+                name: "music_note"
+                size: Theme.iconSizeSmall
                 color: Theme.widgetTextColor
                 anchors.horizontalCenter: parent.horizontalCenter
             }
@@ -2137,6 +2123,17 @@ font.pixelSize: hPillRoot.fontSize
             width: parent ? parent.width : 400
             implicitHeight: popoutLayout.implicitHeight
 
+            MediaArtBackdrop {
+                anchors.fill: parent
+                anchors.margins: -Theme.spacingS
+                activePlayer: root.activePlayer
+                radius: Theme.cornerRadius
+                artOpacity: 0.6
+                surfaceTint: 0.4
+                visible: root.activePlayer
+                z: 0
+            }
+
             Column {
                 id: popoutLayout
                 width: parent.width
@@ -2148,118 +2145,53 @@ font.pixelSize: hPillRoot.fontSize
                 width: parent.width
                 height: nowPlayingContent.implicitHeight + Theme.spacingM * 2
                 radius: Theme.cornerRadius
-                color: root.activePlayer
-                      ? Theme.surfaceContainerHigh
-                      : Theme.surfaceContainer
+                color: root.activePlayer ? "transparent" : Theme.surfaceContainer
                 clip: true
-                // 黑胶唱片专辑封面
-                // 设计说明：
-                // - 尺寸：200x200，保持原有大小
-                // - 样式：深灰色带纹理的黑胶唱片效果
-                // - 中心：80x80的专辑封面
-                // - 位置：卡片右上角，部分超出边界
-                // - 旋转动画：20秒/圈，更慢更优雅
+
                 Item {
                     id: _vinylRecordContainer
-                    width: 200
-                    height: 200
+                    width: 128
+                    height: 128
                     visible: root.activePlayer
                     anchors.top: parent.top
                     anchors.right: parent.right
-                    anchors.topMargin: -40
-                    anchors.rightMargin: -35
+                    anchors.topMargin: -16
+                    anchors.rightMargin: -12
                     z: 10
 
-                    // 黑胶唱片主体（深灰色圆形）
                     Rectangle {
                         id: vinylRecord
                         anchors.fill: parent
-                        radius: 100
-                        color: "#252525"  // 深灰色底色
+                        radius: width / 2
+                        color: Theme.surfaceContainerHighest
 
-                        // 唱片纹理（同心圆纹路）
-                        Canvas {
-                            anchors.fill: parent
-                            onPaint: {
-                                var ctx = getContext("2d");
-                                var centerX = width / 2;
-                                var centerY = height / 2;
-
-                                // 绘制同心圆纹理（6条）
-                                for (var i = 2; i < 8; i++) {
-                                    ctx.beginPath();
-                                    ctx.arc(centerX, centerY, 45 + i * 10, 0, 2 * Math.PI);
-                                    ctx.strokeStyle = "#353535";  // 稍浅的灰色纹理
-                                    ctx.lineWidth = 1;
-                                    ctx.stroke();
-                                }
-                            }
-                        }
-
-                        // 中心专辑封面容器
                         Rectangle {
-                            width: 130
-                            height: 130
-                            radius: 65
+                            width: 100
+                            height: 100
+                            radius: width / 2
                             anchors.centerIn: parent
-                            color: "#1a1a1a"  // 中心深色背景
+                            color: Theme.surfaceContainer
                             clip: true
 
-                            Timer {
-                                id: popArtBounceTimer
-                                interval: 0
-                                onTriggered: {
-                                    var c = popArtLoader.sourceComponent;
-                                    popArtLoader.sourceComponent = null;
-                                    popArtLoader.sourceComponent = c;
-                                }
-                            }
-
-                            Connections {
-                                target: root
-                                function onCurrentTitleChanged() {
-                                    popArtBounceTimer.restart();
-                                }
-                            }
-
                             // 专辑封面
-                            Loader {
-                                id: popArtLoader
+                            DankAlbumArt {
                                 anchors.fill: parent
-                                sourceComponent: popArtSourceComponent
-                            }
-
-                            Component {
-                                id: popArtSourceComponent
-                                DankAlbumArt {
-                                    anchors.fill: parent
-                                    activePlayer: root.activePlayer
-                                    showAnimation: true
-                                }
+                                activePlayer: root.activePlayer
+                                artUrl: TrackArtService.resolvedArtUrl
+                                accentColor: root._cardAccent
+                                showAnimation: true
                             }
                         }
 
-                        // 高光效果（增加立体感）
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: 100
-                            gradient: Gradient {
-                                GradientStop { position: 0.0; color: "#20ffffff" }
-                                GradientStop { position: 0.3; color: "#00ffffff" }
-                                GradientStop { position: 0.7; color: "#00ffffff" }
-                                GradientStop { position: 1.0; color: "#15000000" }
-                            }
-                        }
                     }
 
-                    // 旋转动画（20秒/圈，总在播放时旋转）
                     RotationAnimation on rotation {
                         id: coverRotation
                         from: 0
                         to: 360
-                        duration: 20000          // 20秒转一圈（更慢）
+                        duration: 20000
                         loops: Animation.Infinite
-                        running: root.activePlayer && root.activePlayer.playbackState === MprisPlaybackState.Playing
+                        running: root.vinylSpin && root.activePlayer && root.activePlayer.playbackState === MprisPlaybackState.Playing
                     }
                 }
 
@@ -2274,15 +2206,14 @@ font.pixelSize: hPillRoot.fontSize
                     clip: false
                     z: 1
 
-                    // Track info column (takes full width, cover overlays on top)
                     Column {
                         width: parent.width
                         spacing: Theme.spacingS
+                        readonly property int _discInset: _vinylRecordContainer.visible ? 108 : 0
 
-                        // Header row: icon + "Now Playing"
                         Row {
                             spacing: Theme.spacingS
-                            width: parent.width
+                            width: parent.width - parent._discInset
 
                             DankIcon {
                                 name: root.activePlayer && root.activePlayer.playbackState === MprisPlaybackState.Playing
@@ -2294,11 +2225,11 @@ font.pixelSize: hPillRoot.fontSize
 
                             StyledText {
                                 text: {
-                                    if (!root.activePlayer) return "无活动播放器";
-                                    var identity = root.activePlayer.identity || "未知播放器";
-                                    if (root.isBrowserVideo) return "🎬 Firefox 视频";
-                                    if (root.isMusicVideo) return "🎵 " + identity + " MV";
-                                    return identity + " 正在播放";
+                                    if (!root.activePlayer) return root.isEnglish ? "No player" : "无播放器";
+                                    var identity = root.activePlayer.identity || (root.isEnglish ? "Unknown" : "未知播放器");
+                                    if (root.isBrowserVideo) return root.isEnglish ? "Browser video" : "浏览器视频";
+                                    if (root.isMusicVideo) return identity + " MV";
+                                    return identity;
                                 }
                                 font.pixelSize: Theme.fontSizeMedium
                                 font.weight: Font.DemiBold
@@ -2307,65 +2238,29 @@ font.pixelSize: hPillRoot.fontSize
                             }
                         }
 
-                        // Song title
                         StyledText {
-                            width: parent.width
+                            width: parent.width - parent._discInset
                             text: root.currentTitle || "—"
-                            font.pixelSize: Theme.fontSizeLarge + 2
+                            font.pixelSize: Theme.fontSizeLarge
                             font.weight: Font.Bold
                             color: Theme.surfaceText
-                            maximumLineCount: 2
+                            maximumLineCount: 1
                             elide: Text.ElideRight
-                            wrapMode: Text.WordWrap
                             visible: root.activePlayer
                         }
 
-                        // Artist & Album - 字体跟随歌词字体设置
-                        Column {
-                            width: parent.width
-                            spacing: 4
+                        StyledText {
+                            width: parent.width - parent._discInset
+                            text: {
+                                var a = root.currentArtist || "未知艺术家";
+                                return root.currentAlbum ? a + "  ·  " + root.currentAlbum : a;
+                            }
+                            font.pixelSize: Theme.fontSizeSmall
+                            font.weight: Font.Medium
+                            color: Theme.surfaceVariantText
+                            elide: Text.ElideRight
+                            maximumLineCount: 1
                             visible: root.activePlayer
-
-                            Row {
-                                spacing: Theme.spacingS
-                                DankIcon {
-                                    name: "person"
-                                    size: Theme.iconSizeSmall
-                                    color: Theme.surfaceVariantText
-                                    anchors.verticalCenter: parent.verticalCenter
-                                }
-                                StyledText {
-                                    text: root.currentArtist || "未知艺术家"
-                                    font.pixelSize: pluginData.lyricsFontSize || Theme.fontSizeMedium + 2
-                                    font.weight: Font.Medium
-                                    color: Theme.surfaceText
-                                    anchors.verticalCenter: parent.verticalCenter
-                wrapMode: Text.NoWrap
-                maximumLineCount: 1
-                                    elide: Text.ElideRight
-                                }
-                            }
-
-                            Row {
-                                spacing: Theme.spacingS
-                                visible: root.currentAlbum !== ""
-                                DankIcon {
-                                    name: "album"
-                                    size: Theme.iconSizeSmall
-                                    color: Theme.surfaceVariantText
-                                    anchors.verticalCenter: parent.verticalCenter
-                                }
-                                StyledText {
-                                    text: root.currentAlbum
-                                    font.pixelSize: pluginData.lyricsFontSize || Theme.fontSizeMedium
-                                    font.weight: Font.Medium
-                                    color: Theme.surfaceVariantText
-                                    anchors.verticalCenter: parent.verticalCenter
-                wrapMode: Text.NoWrap
-                maximumLineCount: 1
-                                    elide: Text.ElideRight
-                                }
-                            }
                         }
 
                         // API 状态指示器 - 移动到歌曲信息下方，左对齐
@@ -2373,10 +2268,9 @@ font.pixelSize: hPillRoot.fontSize
                             visible: root.activePlayer && root.showStatusIndicators
                         }
 
-                        // Spacer to ensure vertical separation from cover art
                         Item {
                             width: 1
-                            height: _vinylRecordContainer.visible ? 24 : 0
+                            height: _vinylRecordContainer.visible ? Theme.spacingS : 0
                         }
 
                         // Progress bar with timestamps
@@ -2392,7 +2286,7 @@ font.pixelSize: hPillRoot.fontSize
                         M3WaveProgress {
                             id: macProgressBar
                             width: parent.width
-                            height: 32
+                            height: 24
                             anchors.horizontalCenter: parent.horizontalCenter
 
                             readonly property real ratio: {
@@ -2445,7 +2339,7 @@ font.pixelSize: hPillRoot.fontSize
                                 repeat: true
                                 onTriggered: {
                                     root._forceUpdate = !root._forceUpdate;
-                                    if (pvSliderBox.visible && !pvSlider.isDragging && root.activePlayer)
+                                    if (!pvSlider.isDragging && root.activePlayer)
                                         pvSlider.value = Math.round((root.activePlayer.volume || 0) * 100);
                                 }
                             }
@@ -2467,8 +2361,7 @@ font.pixelSize: hPillRoot.fontSize
                                         return timeStr;
                                     }
                                     font.pixelSize: Theme.fontSizeSmall - 1
-                                    font.weight: Font.Bold
-                                    color: root._cardAccent
+                                    color: Theme.surfaceVariantText
                                 }
 
                                 Item { width: parent.width - _currentTime.implicitWidth - _endTime.implicitWidth; height: 1 }
@@ -2484,112 +2377,141 @@ font.pixelSize: hPillRoot.fontSize
                                         return minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
                                     }
                                     font.pixelSize: Theme.fontSizeSmall - 1
-                                    font.weight: Font.Bold
-                                    color: root._cardAccent
+                                    color: Theme.surfaceVariantText
                                 }
                             }
 
-                            // Volume slider - 显示并调整播放器音量
                             Item {
-                                id: pvSliderBox
                                 width: parent.width
-                                height: 48
-                                visible: root.activePlayer && root.activePlayer.volumeSupported !== false
+                                height: 44
+                                visible: root.activePlayer
 
-                                DankSlider {
-                                    id: pvSlider
-                                    anchors.fill: parent
-                                    minimum: 0
-                                    maximum: 100
-                                    step: 1
-                                    showValue: false
-                                    leftIcon: "volume_down"
-                                    rightIcon: "volume_up"
-                                    trackColor: root._cardAccentTrack
-                                    onSliderValueChanged: (v) => {
-                                        if (root.activePlayer)
-                                            root.activePlayer.volume = v / 100;
-                                    }
-                                }
+                                Row {
+                                    anchors.centerIn: parent
+                                    spacing: Theme.spacingL
 
-                                function _syncFromPlayer() {
-                                    pvSlider.value = root.activePlayer
-                                        ? Math.round((root.activePlayer.volume || 0) * 100)
-                                        : 0;
-                                }
-
-                                Component.onCompleted: _syncFromPlayer()
-                            }
-
-                            // Playback controls - 放大但保持原有样式
-                            Row {
-                                width: parent.width
-                                height: 64
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                spacing: Theme.spacingXL
-
-                                // Previous button（增大到52x52）
-                                MouseArea {
-                                    width: 52
-                                    height: 52
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    onClicked: {
-                                        if (root.activePlayer)
-                                            root.activePlayer.previous();
-                                    }
-
-                                    DankIcon {
-                                        anchors.centerIn: parent
-                                        name: "skip_previous"
-                                        size: 32
-                                        color: root._cardAccent
-                                    }
-                                }
-
-                                // Play/Pause button（增大到64x64）
-                                MouseArea {
-                                    width: 64
-                                    height: 64
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    onClicked: {
-                                        if (root.activePlayer) {
-                                            if (root.activePlayer.playbackState === MprisPlaybackState.Playing)
-                                                root.activePlayer.pause();
-                                            else
-                                                root.activePlayer.play();
+                                    MouseArea {
+                                        width: 36
+                                        height: 36
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: if (root.activePlayer) root.activePlayer.previous()
+                                        DankIcon {
+                                            anchors.centerIn: parent
+                                            name: "skip_previous"
+                                            size: 24
+                                            color: root._cardAccent
                                         }
                                     }
 
-                                    Rectangle {
-                                        anchors.fill: parent
-                                        radius: 32
-                                        color: root._cardAccent
-                                        opacity: 0.1
+                                    MouseArea {
+                                        width: 44
+                                        height: 44
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            if (root.activePlayer) {
+                                                if (root.activePlayer.playbackState === MprisPlaybackState.Playing)
+                                                    root.activePlayer.pause();
+                                                else
+                                                    root.activePlayer.play();
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: width / 2
+                                            color: root._cardAccent
+                                            opacity: 0.12
+                                        }
+
+                                        DankIcon {
+                                            anchors.centerIn: parent
+                                            name: root.activePlayer && root.activePlayer.playbackState === MprisPlaybackState.Playing ? "pause" : "play_arrow"
+                                            size: 28
+                                            color: root._cardAccent
+                                        }
                                     }
 
-                                    DankIcon {
-                                        anchors.centerIn: parent
-                                        name: root.activePlayer && root.activePlayer.playbackState === MprisPlaybackState.Playing ? "pause" : "play_arrow"
-                                        size: 40
-                                        color: root._cardAccent
+                                    MouseArea {
+                                        width: 36
+                                        height: 36
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: if (root.activePlayer) root.activePlayer.next()
+                                        DankIcon {
+                                            anchors.centerIn: parent
+                                            name: "skip_next"
+                                            size: 24
+                                            color: root._cardAccent
+                                        }
                                     }
                                 }
 
-                                // Next button（增大到52x52）
-                                MouseArea {
-                                    width: 52
-                                    height: 52
+                                Row {
+                                    anchors.right: parent.right
                                     anchors.verticalCenter: parent.verticalCenter
-                                    onClicked: {
-                                        if (root.activePlayer)
-                                            root.activePlayer.next();
-                                    }
+                                    spacing: Theme.spacingXS
+                                    visible: root.activePlayer && root.activePlayer.volumeSupported !== false
 
                                     DankIcon {
-                                        anchors.centerIn: parent
-                                        name: "skip_next"
-                                        size: 32
-                                        color: root._cardAccent
+                                        name: pvSlider.value <= 0 ? "volume_off" : (pvSlider.value < 50 ? "volume_down" : "volume_up")
+                                        size: Theme.iconSizeSmall
+                                        color: Theme.surfaceVariantText
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+
+                                    Item {
+                                        id: pvSlider
+                                        width: 84
+                                        height: 16
+                                        anchors.verticalCenter: parent.verticalCenter
+
+                                        property real value: 0
+                                        property bool isDragging: false
+
+                                        function _apply(px) {
+                                            var r = Math.max(0, Math.min(1, px / width));
+                                            value = Math.round(r * 100);
+                                            if (root.activePlayer)
+                                                root.activePlayer.volume = value / 100;
+                                        }
+
+                                        Rectangle {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            width: parent.width
+                                            height: 4
+                                            radius: 2
+                                            color: root._cardAccentTrack
+                                        }
+
+                                        Rectangle {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            width: parent.width * (pvSlider.value / 100)
+                                            height: 4
+                                            radius: 2
+                                            color: root._cardAccent
+                                        }
+
+                                        Rectangle {
+                                            width: 10
+                                            height: 10
+                                            radius: 5
+                                            color: root._cardAccent
+                                            y: (parent.height - height) / 2
+                                            x: Math.max(0, Math.min(parent.width - width, parent.width * (pvSlider.value / 100) - width / 2))
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onPressed: (m) => { pvSlider.isDragging = true; pvSlider._apply(m.x); }
+                                            onPositionChanged: (m) => { if (pressed) pvSlider._apply(m.x); }
+                                            onReleased: pvSlider.isDragging = false
+                                            onCanceled: pvSlider.isDragging = false
+                                        }
+
+                                        Component.onCompleted: value = root.activePlayer ? Math.round((root.activePlayer.volume || 0) * 100) : 0
                                     }
                                 }
                             }
@@ -2610,7 +2532,7 @@ font.pixelSize: hPillRoot.fontSize
                         width: settingsRow.implicitWidth + Theme.spacingM * 2
                         height: 36
                         radius: Theme.cornerRadius
-                        color: settingsBtnMA.pressed ? Theme.surfaceContainerHighest : Theme.surfaceContainer
+                        color: settingsBtnMA.pressed ? Theme.withAlpha(Theme.surfaceText, 0.12) : "transparent"
 
                         Row {
                             id: settingsRow
@@ -2658,7 +2580,7 @@ font.pixelSize: hPillRoot.fontSize
 
                             Rectangle {
                                 anchors.fill: parent; radius: Theme.cornerRadius
-                                color: offsetMinusMA.pressed ? Theme.surfaceContainerHighest : Theme.surfaceContainer
+                                color: offsetMinusMA.pressed ? Theme.withAlpha(Theme.surfaceText, 0.12) : "transparent"
                             }
                             DankIcon {
                                 anchors.centerIn: parent; name: "remove"; size: 16
@@ -2685,7 +2607,7 @@ font.pixelSize: hPillRoot.fontSize
 
                             Rectangle {
                                 anchors.fill: parent; radius: Theme.cornerRadius
-                                color: offsetPlusMA.pressed ? Theme.surfaceContainerHighest : Theme.surfaceContainer
+                                color: offsetPlusMA.pressed ? Theme.withAlpha(Theme.surfaceText, 0.12) : "transparent"
                             }
                             DankIcon {
                                 anchors.centerIn: parent; name: "add"; size: 16
@@ -2703,7 +2625,7 @@ font.pixelSize: hPillRoot.fontSize
 
                             Rectangle {
                                 anchors.fill: parent; radius: Theme.cornerRadius
-                                color: offsetResetMA.pressed ? Theme.surfaceContainerHighest : Theme.surfaceContainer
+                                color: offsetResetMA.pressed ? Theme.withAlpha(Theme.surfaceText, 0.12) : "transparent"
                             }
                             DankIcon {
                                 anchors.centerIn: parent; name: "restart_alt"; size: 16
@@ -2730,7 +2652,7 @@ font.pixelSize: hPillRoot.fontSize
 
                             Rectangle {
                                 anchors.fill: parent; radius: Theme.cornerRadius
-                                color: scanLibMA.pressed ? Theme.surfaceContainerHighest : Theme.surfaceContainer
+                                color: scanLibMA.pressed ? Theme.withAlpha(Theme.surfaceText, 0.12) : "transparent"
                             }
                             DankIcon {
                                 anchors.centerIn: parent; name: "library_music"; size: 16
@@ -2754,23 +2676,12 @@ font.pixelSize: hPillRoot.fontSize
 
                             Rectangle {
                                 anchors.fill: parent; radius: Theme.cornerRadius
-                                color: openCacheMA.pressed ? Theme.surfaceContainerHighest : Theme.surfaceContainer
+                                color: openCacheMA.pressed ? Theme.withAlpha(Theme.surfaceText, 0.12) : "transparent"
                             }
                             DankIcon {
                                 anchors.centerIn: parent; name: "folder_open"; size: 16
                                 color: Theme.surfaceText
                             }
-                        }
-
-                        StyledText {
-                            text: root.currentTitle ? root._cacheKey(root.currentTitle, root.currentArtist || "") : ""
-                            font.pixelSize: Theme.fontSizeSmall
-                            font.family: "monospace"
-                            color: Theme.surfaceVariantText
-                            anchors.verticalCenter: parent.verticalCenter
-                            elide: Text.ElideMiddle
-                            width: Math.min(implicitWidth, 220)
-                            visible: text !== ""
                         }
                     }
 

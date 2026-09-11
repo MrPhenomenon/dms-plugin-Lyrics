@@ -112,6 +112,29 @@ PluginSettings {
                 color: Theme.surfaceText
             }
 
+            SliderSetting {
+                settingKey: "lyricsFontSize"
+                label: root.isEnglish ? "Lyric Font Size" : "歌词字体大小"
+                description: root.isEnglish ? "Font size of the status bar lyric and title text" : "状态栏歌词与标题文字的字体大小"
+                minimum: 9
+                maximum: 24
+                unit: "px"
+                defaultValue: Theme.fontSizeMedium
+            }
+
+            SelectionSetting {
+                settingKey: "lyricsFontWeight"
+                label: root.isEnglish ? "Lyric Font Weight" : "歌词字体粗细"
+                description: root.isEnglish ? "Font weight of the status bar lyric and title text" : "状态栏歌词与标题文字的字重"
+                options: [
+                    { label: root.isEnglish ? "Normal" : "常规", value: "400" },
+                    { label: root.isEnglish ? "Medium" : "中等", value: "500" },
+                    { label: root.isEnglish ? "Semi Bold" : "半粗", value: "600" },
+                    { label: root.isEnglish ? "Bold" : "粗体", value: "700" }
+                ]
+                defaultValue: "400"
+            }
+
             SelectionSetting {
                 settingKey: "coverPosition"
                 label: root.isEnglish ? "Cover Position" : "封面位置"
@@ -160,15 +183,8 @@ PluginSettings {
             ToggleSetting {
                 settingKey: "useAlbumAccent"
                 label: root.isEnglish ? "Card Colors Follow Album Art" : "卡片颜色跟随封面"
-                description: root.isEnglish ? "Use the album art dominant color for the popup card accents (play buttons, timeline, time text). Turn off to follow the theme color. Clocks always use the theme color" : "弹窗卡片重点元素（播放按钮、进度条、时间等）使用当前封面主色；关闭则跟随主题颜色。时钟始终使用主题色"
+                description: root.isEnglish ? "Use the album art dominant color for popup card accents (play buttons, timeline, time text, clocks). Turn off to follow the theme color" : "弹窗卡片重点元素（播放按钮、进度条、时间、时钟等）使用当前封面主色；关闭则跟随主题颜色"
                 defaultValue: true
-            }
-
-            ToggleSetting {
-                settingKey: "usePillAccent"
-                label: root.isEnglish ? "Pill Lyrics Color Follows Album Art" : "胶囊歌词颜色跟随封面"
-                description: root.isEnglish ? "Use the album art dominant color for the status bar pill lyric text (original\/translation and the vertical pill icon). Turn off to use the theme text color" : "状态栏胶囊歌词文字（原文/翻译，及侧边栏歌词图标）使用当前封面主色；关闭则用主题文字颜色"
-                defaultValue: false
             }
 
             ToggleSetting {
