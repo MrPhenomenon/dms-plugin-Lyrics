@@ -1085,9 +1085,7 @@ PluginComponent {
     function _fetchNeteaseLyrics(songId, expectedTitle, expectedArtist, matchedName, matchedArtist, token) {
         if (!root._isCurrentRequest(expectedTitle, expectedArtist, token)) return;
 
-        // Query NetEase directly instead of routing the song id through a third-party proxy.
-        var lyricUrl = "https://music.163.com/api/song/lyric?id=" + encodeURIComponent(songId)
-                     + "&lv=1&kv=1&tv=-1";
+        var lyricUrl = "https://api.paugram.com/netease/?id=" + encodeURIComponent(songId);
 
         var customHeaders = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.0",
