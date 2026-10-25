@@ -284,7 +284,10 @@ PluginComponent {
     onCurrentArtistChanged: fetchDebounceTimer.restart()
     // 插件重载/启动时如果播放器已在播放，属性初值不会触发 onCurrentTitleChanged，
     // 需要主动拉取一次，否则会一直停在“暂无歌词”。
-    Component.onCompleted: fetchDebounceTimer.restart()
+    Component.onCompleted: {
+        fetchDebounceTimer.restart();
+        MprisController.addPositionRef();
+    }
     onLyricsOffsetChanged: {
         if (!_suppressOffsetSave && lyricsLines.length > 0
                 && lyricStatus === lyricState.synced)
@@ -929,7 +932,7 @@ PluginComponent {
 
         root._cancelActiveFetch = _xhrGet(url, 20000,
             function (responseText, httpStatus) {
-                _handleLrclibResponse(responseText, expectedTitle, expectedArtist, token);
+                _handleLrclibResponse(responseText, expectedTitle, expectedArtist, token, false);
             },
             function (errMsg) {
                 _handleLrclibError(errMsg, expectedTitle, expectedArtist, token);
@@ -945,7 +948,42 @@ PluginComponent {
         return url;
     }
 
-    function _handleLrclibResponse(responseText, expectedTitle, expectedArtist, token) {
+    function _fetchFromLrclibSearch(expectedTitle, expectedArtist, token) {
+        var url = "https://lrclib.net/api/search?track_name=" + encodeURIComponent(expectedTitle)
+                + (expectedArtist ? "&artist_name=" + encodeURIComponent(expectedArtist) : "");
+        root._cancelActiveFetch = _xhrGet(url, 20000,
+            function (responseText, httpStatus) {
+                if (!root._isCurrentRequest(expectedTitle, expectedArtist, token)) return;
+                var picked = null;
+                try {
+                    var list = JSON.parse((responseText || "").trim());
+                    if (Array.isArray(list)) {
+                        var matched = _findBestMatch(list.map(function (r) {
+                            return { name: r.trackName, artists: [{ name: r.artistName }],
+                                     album: r.albumName, duration: (r.duration || 0) * 1000, raw: r };
+                        }), expectedTitle, expectedArtist, currentAlbum);
+                        picked = matched ? matched.raw : null;
+                    }
+                } catch (e) {
+                    picked = null;
+                }
+                if (picked && picked.syncedLyrics
+                        && _applyLyricsFromSource(picked.syncedLyrics, lyricSrc.lrclib,
+                                                  expectedTitle, expectedArtist, token))
+                    return;
+                if (picked && picked.plainLyrics
+                        && _applyPlainLyrics(picked.plainLyrics, lyricSrc.lrclib,
+                                             expectedTitle, expectedArtist, token))
+                    return;
+                _fallbackAfterLrclib(status.notFound, "未找到", expectedTitle, expectedArtist, token);
+            },
+            function (errMsg) {
+                _fallbackAfterLrclib(status.error, errMsg, expectedTitle, expectedArtist, token);
+            }
+        );
+    }
+
+    function _handleLrclibResponse(responseText, expectedTitle, expectedArtist, token, searched) {
         if (!root._isCurrentRequest(expectedTitle, expectedArtist, token)) return;
 
         var rawData = (responseText || "").trim();
@@ -958,7 +996,7 @@ PluginComponent {
             var result = JSON.parse(rawData);
 
             if (result.statusCode === 404 || result.error) {
-                _fallbackAfterLrclib(status.notFound, "未找到", expectedTitle, expectedArtist, token);
+                _fetchFromLrclibSearch(expectedTitle, expectedArtist, token);
                 return;
             }
 
@@ -972,17 +1010,17 @@ PluginComponent {
                                          expectedTitle, expectedArtist, token))
                 return;
 
-            _fallbackAfterLrclib(status.notFound, "无歌词数据", expectedTitle, expectedArtist, token);
+            _fetchFromLrclibSearch(expectedTitle, expectedArtist, token);
 
         } catch (e) {
-            _fallbackAfterLrclib(status.error, "解析失败: " + e, expectedTitle, expectedArtist, token);
+            _fetchFromLrclibSearch(expectedTitle, expectedArtist, token);
         }
     }
 
     function _handleLrclibError(errMsg, expectedTitle, expectedArtist, token) {
         if (!root._isCurrentRequest(expectedTitle, expectedArtist, token)) return;
         console.warn("[Lyrics] lrclib: 请求失败 — " + errMsg);
-        _fallbackAfterLrclib(status.error, errMsg, expectedTitle, expectedArtist, token);
+        _fetchFromLrclibSearch(expectedTitle, expectedArtist, token);
     }
 
     function _fallbackAfterLrclib(statusVal, reason, title, artist, token) {
@@ -1347,14 +1385,13 @@ PluginComponent {
                 continue;
 
             var actualArtist = songArtistText(song);
-            if (!artistMatches(expectedArtist, actualArtist))
-                continue;
 
             var actualAlbum = normalize(song.album?.name || song.album);
             var albumExact = nAlbum !== "" && actualAlbum === nAlbum;
 
             var score = titleExact ? 50 : 20;
-            if (nArtist && actualArtist && artistMatches(expectedArtist, actualArtist))
+            var artistOk = artistMatches(expectedArtist, actualArtist);
+            if (nArtist && actualArtist && artistOk)
                 score += 30;
             if (albumExact)
                 score += 20;
@@ -1673,6 +1710,21 @@ PluginComponent {
         }
         rebuildDisplayLines();
     }
+
+    Connections {
+        target: root.activePlayer
+        function onTrackTitleChanged() { artRefreshTimer.restart(); }
+        function onTrackArtUrlChanged() { artRefreshTimer.restart(); }
+        function onMetadataChanged() { artRefreshTimer.restart(); }
+    }
+
+    Timer {
+        id: artRefreshTimer
+        interval: 400
+        onTriggered: TrackArtService._updateArtUrl()
+    }
+
+    Component.onDestruction: MprisController.removePositionRef()
 
     Timer {
         id: positionTimer
@@ -2490,6 +2542,7 @@ PluginComponent {
                 anchors.fill: parent
                 anchors.margins: -Theme.spacingS
                 activePlayer: root.activePlayer
+                artUrl: root.albumArtUrl !== "" ? root.albumArtUrl : TrackArtService.resolvedArtUrl
                 radius: Theme.cornerRadius
                 artOpacity: 0.6
                 surfaceTint: 0.4
