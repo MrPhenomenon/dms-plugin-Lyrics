@@ -1,8 +1,8 @@
 import Quickshell
 import QtQuick
-import QtQuick.Controls
 import Quickshell.Io
 import qs.Common
+import qs.Modals.Common
 import qs.Modules.Plugins
 import qs.Widgets
 
@@ -278,7 +278,7 @@ PluginSettings {
     }
 
     StyledText {
-        text: root.isEnglish ? "Extract LRC lyrics from music file metadata into the local cache. Music library path is set below. Supports FLAC/MP3/OGG/M4A etc." : "从音乐库文件的元数据中提取 LRC 格式内嵌歌词，保存到本地缓存。音乐库路径可在下方「音乐库路径」中设置。支持 FLAC/MP3/OGG/M4A 等格式"
+        text: root.isEnglish ? "Extract LRC or plain-text lyrics from music file metadata into the local cache. Music library path is set below. Supports FLAC/MP3/OGG/M4A etc." : "从音乐库文件的元数据中提取 LRC 或纯文本歌词，保存到本地缓存。音乐库路径可在下方「音乐库路径」中设置。支持 FLAC/MP3/OGG/M4A 等格式"
         font.pixelSize: Theme.fontSizeSmall - 1
         color: Theme.surfaceVariantText
         wrapMode: Text.WordWrap
@@ -331,7 +331,7 @@ PluginSettings {
                     height: 36
                     anchors.verticalCenter: parent.verticalCenter
 
-                    onClicked: clearCacheDialog.open()
+                    onClicked: root._confirmClearCache()
 
                     Rectangle {
                         anchors.fill: parent
@@ -371,7 +371,7 @@ PluginSettings {
             }
 
             StyledText {
-                text: root.isEnglish ? "While playing music, click in the popup toolbar to save the current lyrics to the local cache" : "播放音乐时可在弹窗工具栏点击「缓存歌词」将当前歌词保存到本地缓存"
+                text: root.isEnglish ? "Downloaded lyrics are cached automatically while Local Cache is enabled. Use Import Lyrics in the popup toolbar to scan the music library for embedded lyrics." : "启用本地缓存后，获取到的歌词会自动写入缓存。可在弹窗工具栏点击「导入缓存」扫描音乐库中的内嵌歌词。"
                 font.pixelSize: Theme.fontSizeSmall - 1
                 color: Theme.surfaceVariantText
                 wrapMode: Text.WordWrap
@@ -380,22 +380,29 @@ PluginSettings {
         }
     }
 
+    function _confirmClearCache() {
+        var host = root.Window.window ? root.Window.window.contentItem : root;
+        if (!host)
+            return;
+        var dialog = confirmDialogComponent.createObject(host);
+        if (!dialog)
+            return;
+        dialog.dialogClosed.connect(function () {
+            dialog.destroy();
+        });
+        dialog.show(
+            root.isEnglish ? "Confirm Clear Cache" : "确认清除缓存",
+            root.isEnglish ? "Are you sure you want to clear all lyric caches? This cannot be undone." : "确定要清除所有歌词缓存吗？此操作不可恢复。",
+            function () {
+                clearCacheProcess.running = true;
+            }
+        );
+    }
+
     // 清除缓存确认对话框
-    Dialog {
-        id: clearCacheDialog
-        title: root.isEnglish ? "Confirm Clear Cache" : "确认清除缓存"
-        modal: true
-        standardButtons: Dialog.Yes | Dialog.No
-
-        contentItem: StyledText {
-            text: root.isEnglish ? "Are you sure you want to clear all lyric caches? This cannot be undone." : "确定要清除所有歌词缓存吗？此操作不可恢复。"
-            wrapMode: Text.WordWrap
-            width: parent.width
-        }
-
-        onAccepted: {
-            clearCacheProcess.running = true;
-        }
+    Component {
+        id: confirmDialogComponent
+        ConfirmDialogOverlay {}
     }
 
     // 清除缓存进程
