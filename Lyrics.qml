@@ -2538,18 +2538,6 @@ PluginComponent {
             width: parent ? parent.width : 400
             implicitHeight: popoutLayout.implicitHeight
 
-            MediaArtBackdrop {
-                anchors.fill: parent
-                anchors.margins: -Theme.spacingS
-                activePlayer: root.activePlayer
-                artUrl: root.albumArtUrl !== "" ? root.albumArtUrl : TrackArtService.resolvedArtUrl
-                radius: Theme.cornerRadius
-                artOpacity: 0.6
-                surfaceTint: 0.4
-                visible: root.activePlayer
-                z: 0
-            }
-
             Column {
                 id: popoutLayout
                 width: parent.width
