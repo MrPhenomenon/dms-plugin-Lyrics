@@ -488,6 +488,13 @@ PluginSettings {
             }
 
             ToggleSetting {
+                settingKey: "dmsEnabled"
+                label: root.isEnglish ? "DMS lyrics" : "DMS 歌词"
+                description: root.isEnglish ? "Use DMS's own lyrics providers first; falls back to the sources below" : "优先使用 DMS 内置歌词源，失败时回退到下方来源"
+                defaultValue: true
+            }
+
+            ToggleSetting {
                 settingKey: "neteaseEnabled"
                 label: root.isEnglish ? "Netease Music" : "网易云音乐"
                 description: root.isEnglish ? "Preferred; better support for Chinese songs" : "优先使用，对中文歌曲支持更好"

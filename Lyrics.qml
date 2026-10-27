@@ -12,6 +12,7 @@ PluginComponent {
     layerNamespacePlugin: "lyricsEmbed"
     property bool cachingEnabled: pluginData.cachingEnabled ?? true
     property bool lrclibEnabled: pluginData.lrclibEnabled ?? true
+    property bool dmsEnabled: pluginData.dmsEnabled ?? true
     property bool neteaseEnabled: pluginData.neteaseEnabled ?? true
     property bool customApiEnabled: pluginData.customApiEnabled ?? false
     property string customApiUrl: pluginData.customApiUrl ?? ""
@@ -151,6 +152,7 @@ PluginComponent {
         readonly property int netease: 3
         readonly property int custom: 4
         readonly property int embedded: 5
+        readonly property int dms: 6
     }
     property var lyricsLines: []
     property int currentLineIndex: -1
@@ -255,7 +257,8 @@ PluginComponent {
         return title;
     }
 
-    readonly property bool builtinSourcesEnabled: neteaseEnabled || lrclibEnabled
+    readonly property bool _dmsAvailable: dmsEnabled && DMSService.isConnected && DMSService.capabilities.indexOf("lyrics") !== -1
+    readonly property bool builtinSourcesEnabled: neteaseEnabled || lrclibEnabled || dmsEnabled
     readonly property bool onlineSourcesEnabled: builtinSourcesEnabled
         || (customApiEnabled && customApiUrl && customApiUrl.trim() !== "")
 
@@ -747,11 +750,115 @@ PluginComponent {
             root._setFinalNotFound(status.notFound);
             return;
         }
+        if (_dmsAvailable) {
+            _fetchFromDms(title, artist, token);
+            return;
+        }
+        _startFetchFromWebSources(title, artist, token);
+    }
+    function _startFetchFromWebSources(title, artist, token) {
+        if (!root._isCurrentRequest(title, artist, token)) return;
         if (neteaseEnabled) {
             _fetchFromNetease(title, artist, token);
         } else {
             neteaseStatus = status.skippedConfig;
             _fetchFromLrclib(title, artist, token);
+        }
+    }
+    property int _dmsToken: -1
+    property string _dmsTitle: ""
+    property string _dmsArtist: ""
+
+    LyricsSubscription {
+        active: root._dmsAvailable && root.activePlayer !== null
+    }
+
+    Connections {
+        target: LyricsService.controller
+        function onStateChanged() { root._checkDms(); }
+        function onLinesChanged() { root._checkDms(); }
+        function onTrackChanged() { root._checkDms(); }
+    }
+
+    Timer {
+        id: dmsWaitTimer
+        interval: 25000
+        onTriggered: root._dmsFallback()
+    }
+
+    function _dmsNorm(text) {
+        return String(text || "").trim().toLowerCase();
+    }
+
+    function _fetchFromDms(title, artist, token) {
+        if (!root._isCurrentRequest(title, artist, token)) return;
+        console.info("[Lyrics] DMS: 等待内置歌词 \"" + title + "\"");
+        _dmsToken = token;
+        _dmsTitle = title;
+        _dmsArtist = artist;
+        dmsWaitTimer.restart();
+        root._cancelActiveFetch = function () {
+            root._dmsToken = -1;
+            dmsWaitTimer.stop();
+        };
+        _checkDms();
+    }
+
+    function _dmsFallback() {
+        var token = _dmsToken;
+        var title = _dmsTitle;
+        var artist = _dmsArtist;
+        _dmsToken = -1;
+        dmsWaitTimer.stop();
+        if (token < 0 || !root._isCurrentRequest(title, artist, token)) return;
+        _startFetchFromWebSources(title, artist, token);
+    }
+
+    function _checkDms() {
+        if (_dmsToken < 0) return;
+        var token = _dmsToken;
+        var title = _dmsTitle;
+        var artist = _dmsArtist;
+        if (!root._isCurrentRequest(title, artist, token)) {
+            _dmsToken = -1;
+            dmsWaitTimer.stop();
+            return;
+        }
+        var c = LyricsService.controller;
+        if (!c || !c.track || _dmsNorm(c.track.title) !== _dmsNorm(title)) return;
+        var st = c.state;
+        if (st === "ready") {
+            if (_dmsNorm(c.shownSong) !== _dmsNorm(title)) return;
+            var lines = [];
+            if (c.synced) {
+                var groups = c.lines || [];
+                for (var i = 0; i < groups.length; i++) {
+                    var g = groups[i];
+                    var texts = [];
+                    var parts = g.parts || [];
+                    for (var j = 0; j < parts.length; j++) {
+                        if (!parts[j].background && String(parts[j].x).trim() !== "")
+                            texts.push(String(parts[j].x).trim());
+                    }
+                    var text = texts.join(" ");
+                    if (text === "" && g.x) text = String(g.x).replace(/\n/g, " ").trim();
+                    if (text !== "" && isFinite(g.t))
+                        lines.push({ time: g.t, text: text });
+                }
+            }
+            _dmsToken = -1;
+            dmsWaitTimer.stop();
+            if (lines.length > 0 && _applyLyricsLines(lines, lyricSrc.dms, title, artist, false, token))
+                return;
+            var plain = (c.plainLines || []).join("\n");
+            if (plain.trim() !== "" && _applyPlainLyrics(plain, lyricSrc.dms, title, artist, token))
+                return;
+            _startFetchFromWebSources(title, artist, token);
+            return;
+        }
+        if (st === "none" || st === "error" || st === "instrumental") {
+            if (_dmsNorm(c.requestedSong) !== _dmsNorm(title)) return;
+            _dmsFallback();
         }
     }
     function _logSongChange() {
@@ -1482,7 +1589,8 @@ PluginComponent {
         var sourceName = source === lyricSrc.lrclib ? "lrclib" :
                         source === lyricSrc.netease ? "网易云" :
                         source === lyricSrc.custom ? "自定义API" :
-                        source === lyricSrc.embedded ? "内嵌歌词" : "未知";
+                        source === lyricSrc.embedded ? "内嵌歌词" :
+                        source === lyricSrc.dms ? "DMS" : "未知";
 
         console.info("[Lyrics] ✓ " + sourceName + ": 已找到歌词 (" + lines.length + " 行"
                      + (root.lyricsArePlain ? ", 纯文本" : "") + ") - \"" + title + "\"");
